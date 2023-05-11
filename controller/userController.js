@@ -4,9 +4,9 @@ const Product = require('../models/productModel');
 const cart = require('../models/cartModel')
 const twilio = require('twilio');
 const cartModel = require('../models/cartModel');
-const accountSid = "AC675a25a2d780ee8725bf65b03375b04f";
-const authToken = "615f0a1cb5977894b5963fd9b18601bc";
-const verifySid = "VA6ceb2129702f416081156cb20ce9ca85";
+const accountSid = process.env.ACC_SID;
+const authToken =  process.env.AUTH_TOKEN;
+const verifySid = process.env.VERIFY_SID;
 const client = require("twilio")(accountSid, authToken);
 const nodemailer = require('nodemailer');
 const randomstring = require("randomstring");
@@ -304,12 +304,15 @@ const getOtp = async (req, res) => {
 const verifyOtp = async (req, res) => {
     try {
         const otp = req.body.otp;
+        const userData=await User.findOne({mobile:req.session.mobileData})
         const mobileData = req.session.mobileData
         client.verify.v2
             .services(verifySid)
             .verificationChecks.create({ to: "+91" + mobileData, code: otp })
             .then((verification_check) => {
                 req.session.isLoggedIn = true;
+                req.session.userId=userData._id;
+                console.log(userData._id)
                 res.redirect('/')
             })
         delete req.session.mobileData;
@@ -329,9 +332,7 @@ const loadMenCategory = async (req, res) => {
         const bannerData = await Banner.findOne({list:1});
         const category = await Category.find();
         const productData = await Product.find({category:id}).populate('category',)
-        console.log("productData",productData)
         if (productData) {
-            console.log("working",productData)
             res.render('category', { productData, user , category , bannerData });
         } else {
             res.redirect('/')
@@ -461,27 +462,37 @@ const loadForgetPassword = async (req, res) => {
 
 const sendResetPasswordMobile = async (req, res) => {
     try {
-        const mobile = req.body.mobile;
-        req.session.mobile = mobile
-        const userData = await User.findOne({ mobile: mobile });
-        console.log(userData);
-        if (userData) {
-            const mobile = userData.mobile;
-            client.verify.v2
-                .services(verifySid)
-                .verifications.create({ to: "+91" + mobile, channel: "sms" })
-                .then((verifications) => {
-                    res.render('forget-password-otp');
-                })
-
-        } else {
-            res.render('forget-password', { message: 'number is invalid' })
-        }
+      const mobile = req.body.mobile;
+      req.session.mobile = mobile;
+      const userData = await User.findOne({ mobile: mobile });
+      if (userData) {
+        const mobile = userData.mobile;
+        new Promise((resolve, reject) => {
+          client.verify.v2.services(verifySid).verifications
+            .create({ to: "+91" + mobile, channel: "sms" })
+            .then((verifications) => {
+              resolve(verifications);
+            })
+            .catch((error) => {
+              reject(error);
+            });
+        })
+          .then((verifications) => {
+            res.render('forget-password-otp');
+          })
+          .catch((error) => {
+            console.log(error.message);
+            res.render("error");
+          });
+      } else {
+        res.render('forget-password', { message: 'number is invalid' });
+      }
     } catch (error) {
-        console.log(error.message);
-        res.render("error");
+      console.log(error.message);
+      res.render("error");
     }
-};
+  };
+  
 
 const verifyforgetPassword = async (req, res) => {
     const otp = req.body.otp;
@@ -498,7 +509,6 @@ const verifyforgetPassword = async (req, res) => {
 const insertPassword = async (req, res) => {
     try {
         const { password, cpassword } = req.body
-        console.log(req.body);
         const mobile = req.session.mobile;
         if (password === cpassword) {
             const spassword = await securePassword(password);
