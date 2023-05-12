@@ -254,7 +254,11 @@
 							<p class="card-text">
 								<%= data.status %>
 							</p>
-							<a class="button" href="/add-cart?id=<%= data._id %>">Add Cart</a>
+							<%if(user){%>
+								<a class="button" href="/add-cart?id=<%= data._id %>">Add Cart</a>
+							<%}else{%>
+								<a class="button" href="/login">Add Cart</a>
+								<%}%>
 						</figure>
 
 						<% }); %>
